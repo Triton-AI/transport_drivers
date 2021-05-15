@@ -41,11 +41,17 @@ ament_target_dependencies(${PROJECT_NAME} "ASIO")
 
 ament_auto_add_library(${PROJECT_NAME}_nodes SHARED
   src/serial_bridge_node.cpp
+  src/testing_node.cpp
 )
 
 rclcpp_components_register_node(${PROJECT_NAME}_nodes
   PLUGIN "drivers::serial_driver::SerialBridgeNode"
   EXECUTABLE "serial_bridge"
+)
+
+rclcpp_components_register_node(${PROJECT_NAME}_nodes
+  PLUGIN "drivers::serial_driver::test_SerialBridgeNode"
+  EXECUTABLE "test_serial_bridge"
 )
 
 target_link_libraries(${PROJECT_NAME}_nodes ${PROJECT_NAME})

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "serial_driver/serial_bridge_node.hpp"
+#include "serial_driver/testing_node.hpp"
 
 #include <memory>
 #include <string>
@@ -27,7 +27,7 @@ namespace drivers
 namespace serial_driver
 {
 
-SerialBridgeNode::SerialBridgeNode(const rclcpp::NodeOptions & options)
+test_SerialBridgeNode::test_SerialBridgeNode(const rclcpp::NodeOptions & options)
 : lc::LifecycleNode("serial_bridge_node", options),
   m_owned_ctx{new IoContext(2)},
   m_serial_driver{new SerialDriver(*m_owned_ctx)}
@@ -35,7 +35,7 @@ SerialBridgeNode::SerialBridgeNode(const rclcpp::NodeOptions & options)
   get_params();
 }
 
-SerialBridgeNode::SerialBridgeNode(
+test_SerialBridgeNode::test_SerialBridgeNode(
   const rclcpp::NodeOptions & options,
   const IoContext & ctx)
 : lc::LifecycleNode("serial_bridge_node", options),
@@ -44,14 +44,14 @@ SerialBridgeNode::SerialBridgeNode(
   get_params();
 }
 
-SerialBridgeNode::~SerialBridgeNode()
+test_SerialBridgeNode::~test_SerialBridgeNode()
 {
   if (m_owned_ctx) {
     m_owned_ctx->waitForExit();
   }
 }
 
-LNI::CallbackReturn SerialBridgeNode::on_configure(const lc::State & state)
+LNI::CallbackReturn test_SerialBridgeNode::on_configure(const lc::State & state)
 {
   (void)state;
 
@@ -60,7 +60,7 @@ LNI::CallbackReturn SerialBridgeNode::on_configure(const lc::State & state)
     if (!m_serial_driver->port()->is_open()) {
       m_serial_driver->port()->open();
       m_serial_driver->port()->async_receive(
-        std::bind(&SerialBridgeNode::receive_callback, this, std::placeholders::_1));
+        std::bind(&test_SerialBridgeNode::receive_callback, this, std::placeholders::_1));
     }
   } catch (const std::exception & ex) {
     RCLCPP_ERROR(
@@ -75,7 +75,7 @@ LNI::CallbackReturn SerialBridgeNode::on_configure(const lc::State & state)
 
   // Create Subscriber
   auto qos = rclcpp::QoS(rclcpp::KeepLast(32)).best_effort();
-  auto callback = std::bind(&SerialBridgeNode::subscriber_callback, this, std::placeholders::_1);
+  auto callback = std::bind(&test_SerialBridgeNode::subscriber_callback, this, std::placeholders::_1);
 
   m_subscriber = this->create_subscription<UInt8MultiArray>(
     "serial_write", qos, callback);
@@ -85,7 +85,7 @@ LNI::CallbackReturn SerialBridgeNode::on_configure(const lc::State & state)
   return LNI::CallbackReturn::SUCCESS;
 }
 
-LNI::CallbackReturn SerialBridgeNode::on_activate(const lc::State & state)
+LNI::CallbackReturn test_SerialBridgeNode::on_activate(const lc::State & state)
 {
   (void)state;
   m_publisher->on_activate();
@@ -93,7 +93,7 @@ LNI::CallbackReturn SerialBridgeNode::on_activate(const lc::State & state)
   return LNI::CallbackReturn::SUCCESS;
 }
 
-LNI::CallbackReturn SerialBridgeNode::on_deactivate(const lc::State & state)
+LNI::CallbackReturn test_SerialBridgeNode::on_deactivate(const lc::State & state)
 {
   (void)state;
   m_publisher->on_deactivate();
@@ -101,7 +101,7 @@ LNI::CallbackReturn SerialBridgeNode::on_deactivate(const lc::State & state)
   return LNI::CallbackReturn::SUCCESS;
 }
 
-LNI::CallbackReturn SerialBridgeNode::on_cleanup(const lc::State & state)
+LNI::CallbackReturn test_SerialBridgeNode::on_cleanup(const lc::State & state)
 {
   (void)state;
   m_serial_driver->port()->close();
@@ -111,14 +111,14 @@ LNI::CallbackReturn SerialBridgeNode::on_cleanup(const lc::State & state)
   return LNI::CallbackReturn::SUCCESS;
 }
 
-LNI::CallbackReturn SerialBridgeNode::on_shutdown(const lc::State & state)
+LNI::CallbackReturn test_SerialBridgeNode::on_shutdown(const lc::State & state)
 {
   (void)state;
   RCLCPP_DEBUG(get_logger(), "Serial bridge shutting down.");
   return LNI::CallbackReturn::SUCCESS;
 }
 
-void SerialBridgeNode::get_params()
+void test_SerialBridgeNode::get_params()
 {
   uint32_t baud_rate{};
   auto fc = FlowControl::NONE;
@@ -196,16 +196,25 @@ void SerialBridgeNode::get_params()
   m_device_config = std::make_unique<SerialPortConfig>(baud_rate, fc, pt, sb);
 }
 
-void SerialBridgeNode::receive_callback(const std::vector<uint8_t> & buffer)
-{
+void test_SerialBridgeNode::receive_callback(const std::vector<uint8_t> & buffer)
+{ 
+  auto start = std::chrono::system_clock::now();
+    // Some computation here
   UInt8MultiArray out;
   drivers::common::to_msg(buffer, out);
   if(m_publisher.get() != nullptr){
     m_publisher->publish(out);
   }
+  auto end = std::chrono::system_clock::now();
+
+  std::chrono::duration<double> elapsed_seconds = end-start;
+  std::time_t end_time = std::chrono::system_clock::to_time_t(end);
+  auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end.time_since_epoch()) - std::chrono::duration_cast<std::chrono::seconds>(end.time_since_epoch());
+
+  std::cout << "finished computation at " << std::put_time(std::localtime(&end_time), "%H h %M m %S s ") << ns.count() << " ms " << "elapsed time: " << elapsed_seconds.count() << "s\n";
 }
 
-void SerialBridgeNode::subscriber_callback(const UInt8MultiArray::SharedPtr msg)
+void test_SerialBridgeNode::subscriber_callback(const UInt8MultiArray::SharedPtr msg)
 {
   if (this->get_current_state().id() == State::PRIMARY_STATE_ACTIVE) {
     std::vector<uint8_t> out;
@@ -218,4 +227,4 @@ void SerialBridgeNode::subscriber_callback(const UInt8MultiArray::SharedPtr msg)
 }  // namespace drivers
 
 #include <rclcpp_components/register_node_macro.hpp>  // NOLINT
-RCLCPP_COMPONENTS_REGISTER_NODE(drivers::serial_driver::SerialBridgeNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(drivers::serial_driver::test_SerialBridgeNode)
